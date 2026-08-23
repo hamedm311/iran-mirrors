@@ -2,6 +2,25 @@
 
 ابزار خط فرمان امن برای شناسایی و تبدیل Repositoryهای رسمی Ubuntu و AlmaLinux به Mirrorهای ایران. نسخه اول فقط منابع رسمی سیستم‌عامل و Ruleهای مشخص EPEL و MariaDB را بررسی می‌کند؛ Repositoryهای شخصی، داخلی، Third-party و ناشناخته بدون تغییر باقی می‌مانند.
 
+## نصب سریع
+
+برای اجرای مستقیم آخرین نسخه از GitHub:
+
+```bash
+bash <(curl -Ls --ipv4 https://raw.githubusercontent.com/hamedm311/iran-mirrors/main/mirror-manager.sh)
+```
+
+یا برای نصب محلی از مخزن GitHub:
+
+```bash
+git clone https://github.com/hamedm311/iran-mirrors.git
+cd iran-mirrors
+chmod +x mirror-manager.sh
+sudo bash mirror-manager.sh
+```
+
+دستور اجرای مستقیم، تنظیمات پیش‌فرض Mirrorها را داخل خود اسکریپت دارد و به Clone کردن پروژه نیاز ندارد.
+
 ## سیستم‌عامل‌های پشتیبانی‌شده
 
 | سیستم‌عامل | نسخه‌ها |
@@ -23,7 +42,7 @@
 
 تنظیمات در `config/mirrors.conf` متمرکز است. CloudLinux در این نسخه فقط به‌عنوان مقصد آینده تعریف شده و بدون Rule رسمی تغییر نمی‌کند.
 
-## نصب و اجرا
+## نصب و اجرای محلی
 
 این پروژه نصب پیچیده‌ای ندارد:
 

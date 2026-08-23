@@ -39,7 +39,14 @@ CHANGED_FILES=()
 BACKED_UP_FILES=()
 
 # shellcheck disable=SC1090
-source "$CONFIG_FILE"
+UBUNTU_MIRROR="https://ir.archive.ubuntu.com"
+ALMALINUX_MIRROR="https://mirror.hostbaran.com/almalinux"
+EPEL_MIRROR="https://mirror.hostbaran.com/epel"
+MARIADB_MIRROR="https://mirror.hostbaran.com/mariadb"
+CLOUDLINUX_MIRROR="https://mirror.hostbaran.com/cloudlinux"
+if [[ -r "$CONFIG_FILE" ]]; then
+  source "$CONFIG_FILE"
+fi
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   COLOR_GREEN=$'\033[32m'; COLOR_YELLOW=$'\033[33m'; COLOR_RED=$'\033[31m'
