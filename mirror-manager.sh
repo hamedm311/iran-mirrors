@@ -65,18 +65,18 @@ Usage:
   mirror-manager.sh [OPTIONS]
 
 Options:
-  --dry-run             نمایش تغییرات بدون تغییر فایل
-  --backup              فعال‌سازی Backup (پیش‌فرض)
-  --rollback            بازگردانی آخرین Backup
-  --rollback-on-error   بازگردانی همه تغییرات همین اجرا پس از خطا
-  --yes                 حذف سؤال تأیید
-  --verbose             نمایش جزئیات بیشتر
-  --quiet               فقط Summary نهایی
-  --no-color            غیرفعال‌کردن رنگ ترمینال
-  --no-update           صرف‌نظر از به‌روزرسانی Metadata
-  --json                نمایش Summary به‌صورت JSON
-  --version             نمایش نسخه
-  --help                نمایش این راهنما
+  --dry-run             Preview changes without modifying files
+  --backup              Enable backups (default)
+  --rollback            Restore the latest backup
+  --rollback-on-error   Restore this session after an error
+  --yes                 Skip confirmation
+  --verbose             Show detailed output
+  --quiet               Show only the final summary
+  --no-color            Disable terminal colors
+  --no-update           Skip metadata refresh
+  --json                Print machine-readable JSON
+  --version             Show version
+  --help                Show this help
 EOF
 }
 
@@ -116,7 +116,7 @@ parse_args() {
       --json) JSON_OUTPUT=1; QUIET=1 ;;
       --version) printf '%s v%s\n' "$SCRIPT_NAME" "$SCRIPT_VERSION"; exit 0 ;;
       --help|-h) usage; exit 0 ;;
-      *) fail "گزینه ناشناخته: $1" 1 ;;
+      *) fail "Unknown option: $1" 1 ;;
     esac
     shift
   done
@@ -124,30 +124,30 @@ parse_args() {
 
 require_root() {
   [[ "$(id -u)" -eq 0 ]] || {
-    error "این ابزار باید با دسترسی Root اجرا شود. مثال: sudo bash mirror-manager.sh"
+    error "This tool must be run as root. Example: sudo bash mirror-manager.sh"
     exit 3
   }
 }
 
 check_bash() {
-  (( BASH_VERSINFO[0] >= 4 )) || fail "Bash نسخه 4 یا بالاتر لازم است." 1
+  (( BASH_VERSINFO[0] >= 4 )) || fail "Bash version 4 or newer is required." 1
 }
 
 check_dependencies() {
   local command_name
   local required=(awk sed grep find cp mv mkdir mktemp date uname hostname cmp curl)
   for command_name in "${required[@]}"; do
-    command -v "$command_name" >/dev/null 2>&1 || fail "وابستگی ضروری موجود نیست: $command_name" 1
+    command -v "$command_name" >/dev/null 2>&1 || fail "Missing required dependency: $command_name" 1
   done
   if [[ "$OS_ID" == ubuntu ]]; then
-    command -v apt-get >/dev/null 2>&1 || fail "وابستگی ضروری موجود نیست: apt-get" 1
+    command -v apt-get >/dev/null 2>&1 || fail "Missing required dependency: apt-get" 1
   elif [[ "$OS_ID" == almalinux ]]; then
-    command -v dnf >/dev/null 2>&1 || fail "وابستگی ضروری موجود نیست: dnf" 1
+    command -v dnf >/dev/null 2>&1 || fail "Missing required dependency: dnf" 1
   fi
 }
 
 detect_os() {
-  [[ -r /etc/os-release ]] || fail "فایل /etc/os-release قابل خواندن نیست." 1
+  [[ -r /etc/os-release ]] || fail "Cannot read /etc/os-release." 1
   # shellcheck disable=SC1091
   source /etc/os-release
   OS_ID="${ID:-unknown}"
@@ -179,18 +179,18 @@ EOF
 
 acquire_lock() {
   if command -v flock >/dev/null 2>&1; then
-    exec {LOCK_FD}>"$LOCK_FILE" || fail "ایجاد قفل اجرا ممکن نیست: $LOCK_FILE" 1
+    exec {LOCK_FD}>"$LOCK_FILE" || fail "Cannot create execution lock: $LOCK_FILE" 1
     flock -n "$LOCK_FD" || fail "Another Mirror Manager process is already running." 1
   else
-    warning "flock موجود نیست؛ قفل همزمانی اعمال نشد."
+    warning "flock is unavailable; concurrent execution protection is disabled."
   fi
 }
 
 check_mirror_connectivity() {
   local mirror="$1"
-  info "بررسی دسترسی Mirror: $mirror"
-  curl --fail --silent --show-error --location --head --max-time 10 "$mirror/" >/dev/null || {
-    error "Mirror در دسترس نیست؛ هیچ فایلی تغییر نمی‌کند: $mirror"
+  info "Checking mirror connectivity: $mirror"
+  curl --fail --silent --show-error --location --max-time 10 "$mirror/" -o /dev/null || {
+    error "Mirror health check failed; no files will be modified: $mirror"
     exit 4
   }
 }
@@ -199,8 +199,8 @@ cleanup() {
   local status=$?
   [[ -n "$CURRENT_FILE" ]] && rm -f -- "$CURRENT_FILE.tmp.$$" 2>/dev/null || true
   if (( status != 0 && ROLLBACK_ON_ERROR && ${#CHANGED_FILES[@]} > 0 )); then
-    warning "خطا رخ داد؛ بازگردانی تغییرات همین Session آغاز شد."
-    restore_backup_dir "$BACKUP_DIR" || error "Rollback خودکار کامل نشد."
+    warning "An error occurred; rolling back this session."
+    restore_backup_dir "$BACKUP_DIR" || error "Automatic rollback was incomplete."
   fi
   exit "$status"
 }
@@ -209,7 +209,7 @@ trap cleanup EXIT INT TERM
 create_backup_dir() {
   (( BACKUP_ENABLED )) || return 0
   BACKUP_DIR="$BACKUP_ROOT/$(date '+%Y-%m-%d_%H-%M-%S')"
-  mkdir -p "$BACKUP_DIR/files" || fail "ایجاد مسیر Backup ممکن نیست: $BACKUP_DIR" 1
+  mkdir -p "$BACKUP_DIR/files" || fail "Cannot create backup directory: $BACKUP_DIR" 1
   printf 'timestamp=%s\nhostname=%s\nos=%s\nversion=%s\narchitecture=%s\n' \
     "$(date -Is)" "$HOSTNAME_VALUE" "$OS_ID" "$OS_VERSION" "$ARCH" > "$BACKUP_DIR/manifest.txt"
 }
@@ -217,7 +217,7 @@ create_backup_dir() {
 backup_file() {
   local file="$1" relative destination
   (( BACKUP_ENABLED )) || return 0
-  [[ -e "$file" && ! -L "$file" ]] || { error "Backup امن برای فایل نامعتبر رد شد: $file"; return 1; }
+  [[ -e "$file" && ! -L "$file" ]] || { error "Secure backup rejected an invalid file: $file"; return 1; }
   relative="${file#/}"
   destination="$BACKUP_DIR/files/$relative"
   mkdir -p "$(dirname "$destination")"
@@ -228,7 +228,7 @@ backup_file() {
 
 restore_backup_dir() {
   local directory="$1" file backup
-  [[ -r "$directory/manifest.txt" ]] || { error "Manifest معتبر پیدا نشد: $directory"; return 1; }
+  [[ -r "$directory/manifest.txt" ]] || { error "Valid manifest not found: $directory"; return 1; }
   while IFS=$'\t' read -r file backup; do
     [[ "$file" == file=* ]] || continue
     file="${file#file=}"; backup="${backup#backup=}"
@@ -236,7 +236,7 @@ restore_backup_dir() {
     [[ -f "$backup" ]] || return 1
     cp --preserve=mode,ownership,timestamps -- "$backup" "$file" || return 1
   done < "$directory/manifest.txt"
-  success "Rollback انجام شد: $directory"
+  success "Rollback completed: $directory"
 }
 
 latest_backup() {
@@ -357,9 +357,9 @@ process_file() {
     if transform_alma_file "$file"; then result=0; else result=$?; fi
   fi
   case "$result" in
-    0) ((CHANGED++)); success "تغییر شد: $file" ;;
-    1) ((FAILED++)); error "تغییر فایل ناموفق بود و فایل اصلی حفظ شد: $file" ;;
-    2) ((SKIPPED++)); debug "Already configured یا منبع قابل تغییر نبود: $file" ;;
+    0) ((CHANGED++)); success "Changed: $file" ;;
+    1) ((FAILED++)); error "Modification failed; original file was preserved: $file" ;;
+    2) ((SKIPPED++)); debug "Already configured or not eligible: $file" ;;
   esac
 }
 
@@ -376,9 +376,9 @@ validate_configuration() {
   local file
   for file in "${CHANGED_FILES[@]}"; do
     if [[ "$OS_ID" == ubuntu ]]; then
-      grep -Eq '^[[:space:]]*(deb|deb-src)[[:space:]]+https?://' "$file" || { error "ساختار APT پس از تغییر معتبر نیست: $file"; return 1; }
+      grep -Eq '^[[:space:]]*(deb|deb-src)[[:space:]]+https?://' "$file" || { error "APT structure is invalid after modification: $file"; return 1; }
     else
-      awk '/^\[[^]]+\]/{sections++} END { exit (sections > 0 ? 0 : 1) }' "$file" || { error "ساختار DNF پس از تغییر معتبر نیست: $file"; return 1; }
+      awk '/^\[[^]]+\]/{sections++} END { exit (sections > 0 ? 0 : 1) }' "$file" || { error "DNF structure is invalid after modification: $file"; return 1; }
     fi
   done
 }
@@ -390,9 +390,9 @@ refresh_metadata() {
 
 confirm_changes() {
   (( ASSUME_YES || DRY_RUN || QUIET )) && return 0
-  printf '\nمنابع رسمی شناسایی‌شده تغییر می‌کنند؛ منابع Third-party و ناشناخته دست‌نخورده می‌مانند. ادامه؟ [Y/n] '
+  printf '\nDetected official repositories will be modified; third-party and unknown repositories will remain unchanged. Continue? [Y/n] '
   read -r answer
-  [[ -z "$answer" || "$answer" =~ ^[Yy]$ ]] || { info "عملیات لغو شد."; exit 0; }
+  [[ -z "$answer" || "$answer" =~ ^[Yy]$ ]] || { info "Operation cancelled."; exit 0; }
 }
 
 summary() {
@@ -430,10 +430,10 @@ main() {
   acquire_lock
   if (( ROLLBACK )); then
     local backup
-    backup="$(latest_backup)"; [[ -n "$backup" ]] || fail "هیچ Backupای پیدا نشد." 1
+    backup="$(latest_backup)"; [[ -n "$backup" ]] || fail "No backup was found." 1
     restore_backup_dir "$backup"; exit $?
   fi
-  info "تشخیص: $OS_NAME | نسخه: $OS_VERSION | معماری: $ARCH"
+  info "Detected: $OS_NAME | Version: $OS_VERSION | Architecture: $ARCH"
   if [[ "$OS_ID" == ubuntu ]]; then
     check_mirror_connectivity "$UBUNTU_MIRROR"
   else
@@ -441,7 +441,7 @@ main() {
   fi
   create_backup_dir
   collect_files
-  (( FOUND > 0 )) || warning "هیچ فایل Repository قابل بررسی پیدا نشد."
+  (( FOUND > 0 )) || warning "No repository files were found to process."
   confirm_changes
   validate_configuration || { FAILED=$((FAILED + 1)); summary; exit 4; }
   refresh_metadata || { FAILED=$((FAILED + 1)); summary; exit 4; }
