@@ -350,16 +350,16 @@ is_official_ubuntu_file() { [[ "$1" == /etc/apt/sources.list || "$1" == /etc/apt
 
 process_file() {
   local file="$1" result
-  ((FOUND++))
+  FOUND=$((FOUND + 1))
   if [[ "$OS_ID" == ubuntu ]]; then
     if transform_ubuntu_file "$file"; then result=0; else result=$?; fi
   else
     if transform_alma_file "$file"; then result=0; else result=$?; fi
   fi
   case "$result" in
-    0) ((CHANGED++)); success "Changed: $file" ;;
-    1) ((FAILED++)); error "Modification failed; original file was preserved: $file" ;;
-    2) ((SKIPPED++)); debug "Already configured or not eligible: $file" ;;
+    0) CHANGED=$((CHANGED + 1)); success "Changed: $file" ;;
+    1) FAILED=$((FAILED + 1)); error "Modification failed; original file was preserved: $file" ;;
+    2) SKIPPED=$((SKIPPED + 1)); debug "Already configured or not eligible: $file" ;;
   esac
 }
 
